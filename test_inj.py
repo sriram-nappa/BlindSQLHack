@@ -170,7 +170,7 @@ def getrows(url,tname,cname,n):
 	exploit_recordsName[tname] = tempObj
 
 if __name__ == "__main__":
-	web_url = raw_input("Enter website with absolute url:\n").trim()
+	web_url = raw_input("Enter website with absolute url:\n").strip()
 	status_code = validate_vulnerable(web_url)
 	if status_code == None:
 		sys.exit(0)
@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
 		print table_s
 
-		t_name = raw_input("Enter one table name to read data from: ").lower().trim()
+		t_name = raw_input("Enter one table name to read data from: ").lower().strip()
 		if t_name not in exploit_dict['tableNames']:
 			print "Not a valid table"
 			sys.exit(0)
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 		column_s.add_column("Column(s)",exploit_columnNames[t_name])
 		print column_s
 		
-		cols = raw_input("Enter columns you want separated with ':' like 'col1:col2:col3' - ").lower().trim()
+		cols = raw_input("Enter columns you want separated with ':' like 'col1:col2:col3' - ").lower().strip()
 			
 
 		cnms = cols.split(':')
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 				print "Column " + i + " are not in table: " + t_name
 				sys.exit(0)
 
-		number_of_rows = int(raw_input("Enter number of rows you want to see: ").trim())
+		number_of_rows = int(raw_input("Enter number of rows you want to see: ").strip())
 			
 		if number_of_rows > row_count:
 			print ">>>Warning: Table " + t_name + " has only " + str(row_count) + " row(s)."
@@ -250,7 +250,7 @@ if __name__ == "__main__":
 		tempObj = {}	
 
 		while choice != 'yes' and choice != 'no':		
-			choice = raw_input(">>>Do you want to extract data from different table(s) or column(s): yes or no -->").lower().trim()
+			choice = raw_input(">>>Do you want to extract data from different table(s) or column(s): yes or no -->").lower().strip()
 			if choice != 'yes' and choice != 'no':
 				print ">>>Please enter yes or no"
 		

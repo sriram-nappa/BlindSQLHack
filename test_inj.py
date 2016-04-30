@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import requests
 import sys
 from time import sleep
@@ -181,6 +183,7 @@ if __name__ == "__main__":
 	gettablenames(web_url)
 	tables_loaded = []
 	columns_loaded = {}
+	row_loaded = {}
 	while True:
 		cols_temp = []
 		print "Tables in this Database:"
@@ -199,7 +202,7 @@ if __name__ == "__main__":
 			getcolumnnames(web_url,t_name)
 			getrowcount(web_url,t_name)
 			tables_loaded.append(t_name)
-		
+
 		if t_name not in columns_loaded:
 				columns_loaded[t_name] = cols_temp
 		else:
@@ -228,6 +231,9 @@ if __name__ == "__main__":
 		if number_of_rows > row_count:
 			print ">>>Warning: Table " + t_name + " has only " + str(row_count) + " row(s)."
 			number_of_rows = row_count
+		
+		if t_name not in row_loaded.keys():
+			row_loaded[t_name] = number_of_rows
 			
 		print "Data in table: " + t_name
 			
@@ -235,7 +241,10 @@ if __name__ == "__main__":
 			if i not in columns_loaded[t_name]:
 				getrows(web_url,t_name,i,number_of_rows)			
 				cols_temp.append(i)
-		
+
+			elif number_of_rows != row_loaded[t_name]:
+				getrows(web_url,t_name,i,number_of_rows)
+
 		columns_loaded[t_name] = cols_temp
 		
 		lol = exploit_recordsName[t_name]

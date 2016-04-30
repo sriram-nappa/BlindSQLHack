@@ -2,7 +2,6 @@
 
 import requests
 import sys
-from time import sleep
 from prettytable import PrettyTable
 
 page_length_success = 0
